@@ -83,7 +83,7 @@ def _respect_rate_limit():
     if len(_geo_request_timestamps) >= GEO_RATE_LIMIT:
         sleep = 60 - (now - _geo_request_timestamps[0]) + 0.1
         if sleep > 0:
-            print(f"    (pausing {sleep_for:.1f}s to respect ip-api.com rate limit)")
+            print(f"    (pausing {sleep:.1f}s to respect ip-api.com rate limit)")
             time.sleep(sleep)
 
 def get_geolocation(ip_address):
@@ -123,7 +123,7 @@ def get_geolocation(ip_address):
 def format_geolocation(geo):
     if geo is None:
         return "geo: private/unresolvable"
-    return f"geo: {geo['city']}, {geo['region']}, {geo['country']}, {geo['continent']} | {geo['org']}"
+    return f"{geo['city']}, {geo['region']}, {geo['country']}, {geo['continent']} | {geo['org']}"
 
 # end --- bonus functions ---
 
@@ -175,20 +175,23 @@ def get_route(hostname):
                 if types == 11:
                     bytes = struct.calcsize("d")
                     timeSent = struct.unpack("d", recvPacket[28:28 + bytes])[0]
-                    print(" %d rtt=%.0f ms %s" %(ttl, (timeReceived -t)*1000, addr[0]))
-                    print("    " + format_geolocation(get_geolocation(addr[0]))) # bonus
+                    geo_info = format_geolocation(get_geolocation(addr[0]))
+                    print(" %d rtt=%.0f ms %s [%s]" %(ttl, (timeReceived -t)*1000, addr[0], geo_info))
+                    break
 
                 elif types == 3:
                     bytes = struct.calcsize("d")
                     timeSent = struct.unpack("d", recvPacket[28:28 + bytes])[0]
-                    print(" %d rtt=%.0f ms %s" %(ttl, (timeReceived-t)*1000, addr[0]))
-                    print("    " + format_geolocation(get_geolocation(addr[0]))) # bonus
+                    geo_info = format_geolocation(get_geolocation(addr[0]))
+                    print(" %d rtt=%.0f ms %s [%s]" %(ttl, (timeReceived-t)*1000, addr[0], geo_info))
+                    break
                     
                 elif types == 0:
                     bytes = struct.calcsize("d")
                     timeSent = struct.unpack("d", recvPacket[28:28 + bytes])[0]
-                    print(" %d rtt=%.0f ms %s" %(ttl, (timeReceived - timeSent)*1000, addr[0]))
-                    print("    " + format_geolocation(get_geolocation(addr[0]))) # bonus
+                    geo_info = format_geolocation(get_geolocation(addr[0]))
+                    print(" %d rtt=%.0f ms %s [%s]" %(ttl, (timeReceived - timeSent)*1000, addr[0], geo_info))
+                    print("\nTrace complete. Destination reached in %d hops." % ttl)
                     return
                     
                 else:
@@ -197,6 +200,8 @@ def get_route(hostname):
 
             finally:
                 mySocket.close()
+
+    print("\nTrace complete. Maximum of %d hops reached without finding the destination." % MAX_HOPS)
 
 def run_traceroute(hostname):
     print(f"\nRouting to {hostname}")
