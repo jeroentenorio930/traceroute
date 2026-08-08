@@ -5,6 +5,8 @@ import struct
 import time
 import select
 import binascii
+import ipaddress
+import requests
 
 ICMP_ECHO_REQUEST = 8
 MAX_HOPS = 30
@@ -13,6 +15,12 @@ TRIES = 2
 # The packet that we shall send to each router along the path is the ICMP echo
 # request packet, which is exactly what we had used in the ICMP ping exercise.
 # We shall use the same packet that we built in the Ping exercise
+
+# --- bonus variables ---
+GEO_API_URL = "http://ip-api.com/json/{}"
+GEO_RATE_LIMIT = 45
+GEO_FIELDS = "status,message,continent,country,regionName,city,isp,org,query"
+_geo_request_timestamps = []
 
 def checksum(string):
 # In this function we make the checksum of our packet
@@ -65,6 +73,60 @@ def build_packet():
     packet = header + data
     return packet
 
+# start --- bonus functions ---
+def _respect_rate_limit():
+    now = time.time()
+
+    while _geo_request_timestamps and now - _geo_request_timestamps[0] > 60:
+        _geo_request_timestamps.pop(0)
+
+    if len(_geo_request_timestamps) >= GEO_RATE_LIMIT:
+        sleep = 60 - (now - _geo_request_timestamps[0]) + 0.1
+        if sleep > 0:
+            print(f"    (pausing {sleep_for:.1f}s to respect ip-api.com rate limit)")
+            time.sleep(sleep)
+
+def get_geolocation(ip_address):
+    try:
+        if ipaddress.ip_address(ip_address).is_private:
+            return None
+    except ValueError:
+        return None
+
+    _respect_rate_limit()
+
+    try:
+        _geo_request_timestamps.append(time.time())
+        response = requests.get(
+            GEO_API_URL.format(ip_address),
+            params={"fields": GEO_FIELDS},
+            timeout=3
+        )
+        response.raise_for_status()
+        data = response.json()
+    except requests.RequestException:
+        return None
+    except ValueError:
+        return None
+
+    if data.get("status") != "success":
+        return None
+
+    return {
+        "city": data.get("city") or "N/A",
+        "region": data.get("regionName") or "N/A",
+        "country": data.get("country") or "N/A",
+        "continent": data.get("continent") or "N/A",
+        "org": data.get("isp") or data.get("org") or "N/A",
+    }
+
+def format_geolocation(geo):
+    if geo is None:
+        return "geo: private/unresolvable"
+    return f"geo: {geo['city']}, {geo['region']}, {geo['country']}, {geo['continent']} | {geo['org']}"
+
+# end --- bonus functions ---
+
 def get_route(hostname):
     timeLeft = TIMEOUT
     for ttl in range(1,MAX_HOPS):
@@ -114,16 +176,19 @@ def get_route(hostname):
                     bytes = struct.calcsize("d")
                     timeSent = struct.unpack("d", recvPacket[28:28 + bytes])[0]
                     print(" %d rtt=%.0f ms %s" %(ttl, (timeReceived -t)*1000, addr[0]))
+                    print("    " + format_geolocation(get_geolocation(addr[0]))) # bonus
 
                 elif types == 3:
                     bytes = struct.calcsize("d")
                     timeSent = struct.unpack("d", recvPacket[28:28 + bytes])[0]
                     print(" %d rtt=%.0f ms %s" %(ttl, (timeReceived-t)*1000, addr[0]))
+                    print("    " + format_geolocation(get_geolocation(addr[0]))) # bonus
                     
                 elif types == 0:
                     bytes = struct.calcsize("d")
                     timeSent = struct.unpack("d", recvPacket[28:28 + bytes])[0]
                     print(" %d rtt=%.0f ms %s" %(ttl, (timeReceived - timeSent)*1000, addr[0]))
+                    print("    " + format_geolocation(get_geolocation(addr[0]))) # bonus
                     return
                     
                 else:
@@ -133,9 +198,13 @@ def get_route(hostname):
             finally:
                 mySocket.close()
 
-print("Routing to google.com")
-get_route("google.com")
-print("\nRouting to dlsu.instructure.com")
-get_route("dlsu.instructure.com")
-print("\nRouting to www.dlsu.edu.ph")
-get_route("www.dlsu.edu.ph")
+def run_traceroute(hostname):
+    print(f"\nRouting to {hostname}")
+    try:
+        get_route(hostname)
+    except gaierror as e:
+        print(f"    Could not resolve {hostname}: {e}")
+
+run_traceroute("google.com")
+run_traceroute("dlsu.instructure.com")
+run_traceroute("www.dlsu.edu.ph")
