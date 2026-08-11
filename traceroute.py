@@ -213,3 +213,4 @@ def run_traceroute(hostname):
 run_traceroute("google.com")
 run_traceroute("dlsu.instructure.com")
 run_traceroute("www.dlsu.edu.ph")
+run_traceroute("dlsu.edu.ph")
