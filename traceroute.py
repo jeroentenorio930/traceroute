@@ -83,7 +83,7 @@ def _respect_rate_limit():
     if len(_geo_request_timestamps) >= GEO_RATE_LIMIT:
         sleep = 60 - (now - _geo_request_timestamps[0]) + 0.1
         if sleep > 0:
-            print(f"    (pausing {sleep_for:.1f}s to respect ip-api.com rate limit)")
+            print(f"    (pausing {sleep:.1f}s to respect ip-api.com rate limit)")
             time.sleep(sleep)
 
 def get_geolocation(ip_address):
